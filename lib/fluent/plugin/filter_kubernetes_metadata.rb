@@ -321,12 +321,18 @@ module Fluent::Plugin
     end
 
     def filter_stream(tag, es)
-      return es if (es.respond_to?(:empty?) && es.empty?) || !es.is_a?(Fluent::EventStream)
+      # NB: I'm instrumenting with logging to see what's going wrong with this filterd plugin
+      log.info("filter_stream - tag=#{tag}, use_journal=#{@use_journal}")
+      if (es.respond_to?(:empty?) && es.empty?) || !es.is_a?(Fluent::EventStream)
+        log.info("filter_stream - returning es")
+        return es
+      end
       new_es = Fluent::MultiEventStream.new
       tag_match_data = tag.match(@tag_to_kubernetes_name_regexp_compiled) unless @use_journal
       tag_metadata = nil
       batch_miss_cache = {}
       es.each do |time, record|
+        log.info("filter_stream - record = #{record}")
         if tag_match_data && tag_metadata.nil?
           tag_metadata = get_metadata_for_record(tag_match_data['namespace'], tag_match_data['pod_name'], tag_match_data['container_name'],
             tag_match_data['docker_id'], create_time_from_record(record, time), batch_miss_cache)
