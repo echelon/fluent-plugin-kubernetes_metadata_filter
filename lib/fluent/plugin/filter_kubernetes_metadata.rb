@@ -322,17 +322,18 @@ module Fluent::Plugin
 
     def filter_stream(tag, es)
       # NB: I'm instrumenting with logging to see what's going wrong with this filterd plugin
-      log.info("filter_stream - tag=#{tag}, use_journal=#{@use_journal}")
+      log.info("filter_stream - tag=#{tag}, use_journal=#{@use_journal}, es=#{es}")
       if (es.respond_to?(:empty?) && es.empty?) || !es.is_a?(Fluent::EventStream)
         log.info("filter_stream - returning es")
         return es
       end
       new_es = Fluent::MultiEventStream.new
       tag_match_data = tag.match(@tag_to_kubernetes_name_regexp_compiled) unless @use_journal
+      log.info("filter_stream - tag_match_data=#{tag_match_data}")
       tag_metadata = nil
       batch_miss_cache = {}
       es.each do |time, record|
-        log.info("filter_stream - record = #{record}")
+        log.info("filter_stream - record=#{record}")
         if tag_match_data && tag_metadata.nil?
           tag_metadata = get_metadata_for_record(tag_match_data['namespace'], tag_match_data['pod_name'], tag_match_data['container_name'],
             tag_match_data['docker_id'], create_time_from_record(record, time), batch_miss_cache)
@@ -342,6 +343,8 @@ module Fluent::Plugin
           (j_metadata = get_metadata_for_journal_record(record, time, batch_miss_cache))
           metadata = j_metadata
         end
+        log.info("filter_stream - record.kubernetes=#{record['kubernetes']}")
+        log.info("filter_stream - record.docker=#{record['docker']}")
         if @lookup_from_k8s_field && record.has_key?('kubernetes') && record.has_key?('docker') &&
           record['kubernetes'].respond_to?(:has_key?) && record['docker'].respond_to?(:has_key?) &&
           record['kubernetes'].has_key?('namespace_name') &&
@@ -354,6 +357,7 @@ module Fluent::Plugin
             metadata = k_metadata
         end
 
+        log.info("filter_stream - metadata=#{metadata}")
         record = record.merge(metadata) if metadata
         new_es.add(time, record)
       end
